@@ -14,6 +14,24 @@ from deezer_downloader.configuration import config
 from deezer_downloader.web.music_backend import sched
 from deezer_downloader.deezer import deezer_search, init_deezer_session
 
+try:
+    from gntplib import Publisher  # type: ignore
+    growl = Publisher(  # type: ignore
+            "Deezer-Downloader",
+            ["info", "error", "warning", "debug", "finish", "mpd_update"],
+            icon="deezer-downloader.png"
+        )
+
+    try:
+        growl.register()
+    except:
+        pass
+
+    HAS_GNTPLIB = True
+except Exception as e:
+    print(f"[GNTPLIB:ERROR] {e}")
+    HAS_GNTPLIB = False
+
 app = Flask(__name__)
 auto_index = AutoIndex(app, config["download_dirs"]["base"], add_url_rules=False)
 auto_index.add_icon_rule('music.png', ext='m3u8')
@@ -170,6 +188,7 @@ def deezer_download_song_or_album():
     """
     user_input = request.get_json(force=True)
     desc = "Downloading {}".format(user_input['type'])
+    if HAS_GNTPLIB: growl.publish("info", "DeezDown - INFO", desc)
     if user_input['type'] == "track":
         task = sched.enqueue_task(desc, "download_deezer_song_and_queue",
                                   track_id=user_input['music_id'],
@@ -193,6 +212,7 @@ def youtubedl_download():
     """
     user_input = request.get_json(force=True)
     desc = "Downloading via youtube-dl"
+    if HAS_GNTPLIB: growl.publish("info", "DeezDown - INFO", desc)
     task = sched.enqueue_task(desc, "download_youtubedl_and_queue",
                               video_url=user_input['url'],
                               add_to_playlist=user_input['add_to_playlist'])
@@ -212,6 +232,7 @@ def deezer_playlist_download():
     """
     user_input = request.get_json(force=True)
     desc = "Downloading Deezer playlist"
+    if HAS_GNTPLIB: growl.publish("info", "DeezDown - INFO", desc)
     task = sched.enqueue_task(desc, "download_deezer_playlist_and_queue_and_zip",
                               playlist_id=user_input['playlist_url'],
                               add_to_playlist=user_input['add_to_playlist'],
@@ -234,6 +255,7 @@ def spotify_playlist_download():
     """
     user_input = request.get_json(force=True)
     desc = "Downloading Spotify playlist"
+    if HAS_GNTPLIB: growl.publish("info", "DeezDown - INFO", desc)
     task = sched.enqueue_task(desc, "download_spotify_playlist_and_queue_and_zip",
                               playlist_name=user_input['playlist_name'],
                               playlist_id=user_input['playlist_url'],
@@ -256,6 +278,7 @@ def deezer_favorites_download():
     """
     user_input = request.get_json(force=True)
     desc = "Downloading Deezer favorites"
+    if HAS_GNTPLIB: growl.publish("info", "DeezDown - INFO", desc)
     task = sched.enqueue_task(desc, "download_deezer_favorites",
                               user_id=user_input['user_id'],
                               add_to_playlist=user_input['add_to_playlist'],

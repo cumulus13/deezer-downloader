@@ -15,6 +15,24 @@ from deezer_downloader.deezer import get_file_extension
 from deezer_downloader.threadpool_queue import ThreadpoolScheduler, report_progress
 sched = ThreadpoolScheduler()
 
+try:
+    from gntplib import Publisher  # type: ignore
+    growl = Publisher(  # type: ignore
+            "Deezer-Downloader",
+            ["info", "error", "warning", "debug", "finish", "mpd_update"],
+            icon="deezer-downloader.png"
+        )
+
+    try:
+        growl.register()
+    except:
+        pass
+
+    HAS_GNTPLIB = True
+except Exception as e:
+    print(f"[GNTPLIB:ERROR] {e}")
+    HAS_GNTPLIB = False
+
 
 def check_download_dirs_exist():
     for directory in [config["download_dirs"]["songs"], config["download_dirs"]["zips"], config["download_dirs"]["albums"],
@@ -38,6 +56,7 @@ def update_mpd_db(songs, add_to_playlist):
     # songs: list of music files or just a string (file path)
     if not config["mpd"].getboolean("use_mpd"):
         return
+    if HAS_GNTPLIB: growl.publish("mpd_update", "DeezDown", "Updating mpd database")
     print("Updating mpd database")
     timeout_counter = 0
     mpd_client = mpd.MPDClient(use_unicode=True)
@@ -109,8 +128,13 @@ def download_song_and_get_absolute_filename(search_type, song, playlist_name=Non
         absolute_filename = os.path.join(playlist_dir, song_filename)
 
     if os.path.exists(absolute_filename):
+        if HAS_GNTPLIB:
+            growl.publish("warning", "DeezDown - WARNING", "Skipping song '{}'. Already exists.".format(absolute_filename))
+        
         print("Skipping song '{}'. Already exists.".format(absolute_filename))
     else:
+        if HAS_GNTPLIB:
+            growl.publish("info", "DeezDown - INFO", "Downloading '{}'".format(song_filename))
         print("Downloading '{}'".format(song_filename))
         download_song(song, absolute_filename)
     return absolute_filename
@@ -170,6 +194,7 @@ def download_deezer_album_and_queue_and_zip(album_id, add_to_playlist, create_zi
             absolute_filename = download_song_and_get_absolute_filename(TYPE_ALBUM, song)
             songs_absolute_location.append(absolute_filename)
         except Exception as e:
+            if HAS_GNTPLIB: growl.publish("warning", "DeezDown - WARNING", f"{e}. Continuing with album...")
             print(f"Warning: {e}. Continuing with album...")
     update_mpd_db(songs_absolute_location, add_to_playlist)
     if create_zip:
