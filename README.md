@@ -15,6 +15,10 @@
 - MPD integration (use it on a Raspberry Pi!)
 - simple REST api
 - proxy support (https/socks5)
+- [NEW] add support growl (gntplib) notification for warning, info, error
+- [NEW] add interactive cli tool
+
+**[NEW]** means add by my self, since on streaming repo not accepted.
 
 ## Table of Contents:
 - [Get started](#get-started)
