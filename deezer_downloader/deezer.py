@@ -236,13 +236,13 @@ def download_song(song: dict, output_file: str) -> None:
         url = get_song_url(song["TRACK_TOKEN"])
     except Exception as e:
         if HAS_GNTPLIB:
-            growl.publish("warning", "DeezDown - WARNING", f"Could not download song (https://www.deezer.com/us/track/{song['SNG_ID']}) Maybe it's not available anymore or at least not in your country.")
-            growl.publish("error", "DeezDown - ERROR", str(e))
+            growl.publish("warning", "DeezDown - WARNING", f"Could not download song (https://www.deezer.com/us/track/{song['SNG_ID']}) Maybe it's not available anymore or at least not in your country.", icon="deezer-downloader.png")
+            growl.publish("error", "DeezDown - ERROR", str(e), icon="deezer-downloader.png")
         print(f"Could not download song (https://www.deezer.com/us/track/{song['SNG_ID']}). Maybe it's not available anymore or at least not in your country. {e}")
         if "FALLBACK" in song:
             song = song["FALLBACK"]
             if HAS_GNTPLIB:
-                growl.publish("warning", "DeezDown - WARNING", f"Trying fallback song https://www.deezer.com/us/track/{song['SNG_ID']}")
+                growl.publish("warning", "DeezDown - WARNING", f"Trying fallback song https://www.deezer.com/us/track/{song['SNG_ID']}", icon="deezer-downloader.png")
             print(f"Trying fallback song https://www.deezer.com/us/track/{song['SNG_ID']}")
             try:
                 url = get_song_url(song["TRACK_TOKEN"])
@@ -250,7 +250,7 @@ def download_song(song: dict, output_file: str) -> None:
                 pass
             else:
                 if HAS_GNTPLIB:
-                    growl.publish("warning", "DeezDown - WARNING", "Fallback song seems to work")
+                    growl.publish("warning", "DeezDown - WARNING", "Fallback song seems to work", icon="deezer-downloader.png")
                 print("Fallback song seems to work")
         else:
             raise
@@ -266,16 +266,16 @@ def download_song(song: dict, output_file: str) -> None:
         write_song_metadata(output_file, song, is_flac)
     except MutagenError as e:
         if HAS_GNTPLIB:
-            growl.publish("warning", "DeezDown - WARNING", "Could not write metadata to file")
-            growl.publish("error", "DeezDown - ERROR", f"Warning: Could not write metadata to file: {e}")
+            growl.publish("warning", "DeezDown - WARNING", "Could not write metadata to file", icon="deezer-downloader.png")
+            growl.publish("error", "DeezDown - ERROR", f"Warning: Could not write metadata to file: {e}", icon="deezer-downloader.png")
         print(f"{e}")
     except Exception as e:
         if HAS_GNTPLIB:
-            growl.publish("warning", "DeezDown - WARNING", f"Could not write song to disk")
-            growl.publish("error", "DeezDown - ERROR", f"Could not write song to disk: {e}")
+            growl.publish("warning", "DeezDown - WARNING", f"Could not write song to disk", icon="deezer-downloader.png")
+            growl.publish("error", "DeezDown - ERROR", f"Could not write song to disk: {e}", icon="deezer-downloader.png")
         print(f"{e}")
         raise DeezerApiException(f"Could not write song to disk: {e}") from e
-    if HAS_GNTPLIB: growl.publish("finish", "DeezDown", "Download finished: {}".format(output_file))
+    if HAS_GNTPLIB: growl.publish("finish", "DeezDown", "Download finished: {}".format(output_file), icon="deezer-downloader.png")
     print("Download finished: {}".format(output_file))
 
 
@@ -345,10 +345,10 @@ def get_song_infos_from_deezer_website(search_type, id):
         url = "https://www.deezer.com/us/{}/{}".format(search_type, id)
         resp = session.get(url)
         if resp.status_code == 404:
-            if HAS_GNTPLIB: growl.publish("error", "DeezDown - ERROR", "ERROR: Got a 404 for {} from Deezer".format(url))
+            if HAS_GNTPLIB: growl.publish("error", "DeezDown - ERROR", "ERROR: Got a 404 for {} from Deezer".format(url), icon="deezer-downloader.png")
             raise Deezer404Exception("ERROR: Got a 404 for {} from Deezer".format(url))
         if "MD5_ORIGIN" not in resp.text:
-            if HAS_GNTPLIB: growl.publish("error", "DeezDown - ERROR", "ERROR: we are not logged in on deezer.com. Please update the cookie")
+            if HAS_GNTPLIB: growl.publish("error", "DeezDown - ERROR", "ERROR: we are not logged in on deezer.com. Please update the cookie", icon="deezer-downloader.png")
             raise Deezer403Exception("ERROR: we are not logged in on deezer.com. Please update the cookie")
 
         parser = ScriptExtractor()
