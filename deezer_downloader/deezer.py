@@ -34,6 +34,11 @@ except Exception as e:
     print(f"[GNTPLIB:ERROR] {e}")
     HAS_GNTPLIB = False
 
+try:
+    from .printer import _print, _log  # type: ignore
+except:
+    from printer import _print, _log
+
 # BEGIN TYPES
 TYPE_TRACK = "track"
 TYPE_ALBUM = "album"
@@ -238,12 +243,12 @@ def download_song(song: dict, output_file: str) -> None:
         if HAS_GNTPLIB:
             growl.publish("warning", "DeezDown - WARNING", f"Could not download song (https://www.deezer.com/us/track/{song['SNG_ID']}) Maybe it's not available anymore or at least not in your country.", icon="deezer-downloader.png")
             growl.publish("error", "DeezDown - ERROR", str(e), icon="deezer-downloader.png")
-        print(f"Could not download song (https://www.deezer.com/us/track/{song['SNG_ID']}). Maybe it's not available anymore or at least not in your country. {e}")
+        _log(f"Could not download song (https://www.deezer.com/us/track/{song['SNG_ID']}). Maybe it's not available anymore or at least not in your country. {e}", s='e')
         if "FALLBACK" in song:
             song = song["FALLBACK"]
             if HAS_GNTPLIB:
                 growl.publish("warning", "DeezDown - WARNING", f"Trying fallback song https://www.deezer.com/us/track/{song['SNG_ID']}", icon="deezer-downloader.png")
-            print(f"Trying fallback song https://www.deezer.com/us/track/{song['SNG_ID']}")
+            _log(f"Trying fallback song https://www.deezer.com/us/track/{song['SNG_ID']}", s='d')
             try:
                 url = get_song_url(song["TRACK_TOKEN"])
             except Exception:
@@ -251,7 +256,7 @@ def download_song(song: dict, output_file: str) -> None:
             else:
                 if HAS_GNTPLIB:
                     growl.publish("warning", "DeezDown - WARNING", "Fallback song seems to work", icon="deezer-downloader.png")
-                print("Fallback song seems to work")
+                _log("Fallback song seems to work", s='c')
         else:
             raise
 
@@ -268,15 +273,15 @@ def download_song(song: dict, output_file: str) -> None:
         if HAS_GNTPLIB:
             growl.publish("warning", "DeezDown - WARNING", "Could not write metadata to file", icon="deezer-downloader.png")
             growl.publish("error", "DeezDown - ERROR", f"Warning: Could not write metadata to file: {e}", icon="deezer-downloader.png")
-        print(f"{e}")
+        _log(f"{e}", s='e')
     except Exception as e:
         if HAS_GNTPLIB:
             growl.publish("warning", "DeezDown - WARNING", f"Could not write song to disk", icon="deezer-downloader.png")
             growl.publish("error", "DeezDown - ERROR", f"Could not write song to disk: {e}", icon="deezer-downloader.png")
-        print(f"{e}")
+        _log(f"{e}", s='e')
         raise DeezerApiException(f"Could not write song to disk: {e}") from e
     if HAS_GNTPLIB: growl.publish("finish", "DeezDown", "Download finished: {}".format(output_file), icon="deezer-downloader.png")
-    print("Download finished: {}".format(output_file))
+    _log("Download finished: {}".format(output_file), s='i')
 
 
 def write_song_metadata(output_file: str, song: dict, is_flac: bool) -> None:

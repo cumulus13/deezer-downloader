@@ -1,3 +1,11 @@
+#!/usr/bin/env python3
+
+# File: deezer_downloader/web/music_backend.py
+# Editor: Hadi Cahyadi <cumulus13@gmail.com>
+# Date: 2026-09-10
+# Description: 
+# License: MIT
+
 import time
 import os.path
 from os.path import basename
@@ -34,6 +42,11 @@ from deezer_downloader.notifier import growl
 #     print(f"[GNTPLIB:ERROR] {e}")
 #     HAS_GNTPLIB = False
 
+try:
+    from .printer import _print, _log  # type: ignore
+except:
+    from printer import _print, _log
+
 
 def check_download_dirs_exist():
     for directory in [config["download_dirs"]["songs"], config["download_dirs"]["zips"], config["download_dirs"]["albums"],
@@ -58,13 +71,13 @@ def update_mpd_db(songs, add_to_playlist):
     if not config["mpd"].getboolean("use_mpd"):
         return
     growl.publish("mpd_update", "DeezDown", "Updating mpd database", icon="deezer-downloader.png")
-    print("Updating mpd database")
+    _log("Updating mpd database", s='i')
     timeout_counter = 0
     mpd_client = mpd.MPDClient(use_unicode=True)
     try:
         mpd_client.connect(config["mpd"]["host"], config["mpd"].getint("port"))
     except ConnectionRefusedError as e:
-        print("ERROR connecting to MPD ({}:{}): {}".format(config["mpd"]["host"], config["mpd"]["port"], e))
+        _log("ERROR connecting to MPD ({}:{}): {}".format(config["mpd"]["host"], config["mpd"]["port"], e), s='e')
         return
     mpd_client.update()
     if add_to_playlist:
@@ -73,17 +86,17 @@ def update_mpd_db(songs, add_to_playlist):
         while len(mpd_client.search("file", songs[0])) == 0:
             # c.update() does not block so wait for it
             if timeout_counter == 10:
-                print("Tried it {} times. Give up now.".format(timeout_counter))
+                _log("Tried it {} times. Give up now.".format(timeout_counter), s='i')
                 return
-            print("'{}' not found in the music db. Let's wait for it".format(songs[0]))
+            _log("'{}' not found in the music db. Let's wait for it".format(songs[0]), s='e')
             timeout_counter += 1
             time.sleep(2)
         for song in songs:
             try:
                 mpd_client.add(song)
-                print("Added to mpd playlist: '{}'".format(song))
+                _log("Added to mpd playlist: '{}'".format(song), s='i')
             except mpd.base.CommandError as mpd_error:
-                print("ERROR adding '{}' to playlist: {}".format(song, mpd_error))
+                _log("ERROR adding '{}' to playlist: {}".format(song, mpd_error), s='w')
 
 
 def clean_filename(path):
@@ -131,10 +144,10 @@ def download_song_and_get_absolute_filename(search_type, song, playlist_name=Non
     if os.path.exists(absolute_filename):
         growl.publish("warning", "DeezDown - WARNING", "Skipping song '{}'. Already exists.".format(absolute_filename), icon="deezer-downloader.png")
         
-        print("Skipping song '{}'. Already exists.".format(absolute_filename))
+        _log("Skipping song '{}'. Already exists.".format(absolute_filename), s='a')
     else:
         growl.publish("info", "DeezDown - INFO", "Downloading '{}'".format(song_filename), icon="deezer-downloader.png")
-        print("Downloading '{}'".format(song_filename))
+        _log("Downloading '{}'".format(song_filename), s='i')
         download_song(song, absolute_filename)
     return absolute_filename
 
@@ -143,15 +156,15 @@ def create_zip_file(songs_absolute_location):
     # take first song in list and take the parent dir (name of album/playlist")
     parent_dir = basename(os.path.dirname(songs_absolute_location[0]))
     location_zip_file = os.path.join(config["download_dirs"]["zips"], "{}.zip".format(parent_dir))
-    print("Creating zip file '{}'".format(location_zip_file))
+    _log("Creating zip file '{}'".format(location_zip_file), s='n')
     with ZipFile(location_zip_file, 'w', compression=ZIP_DEFLATED) as zip:
         for song_location in songs_absolute_location:
             try:
-                print("Adding song {}".format(song_location))
+                _log("Adding song {}".format(song_location), s='d')
                 zip.write(song_location, arcname=os.path.join(parent_dir, basename(song_location)))
             except FileNotFoundError:
-                print("Could not find file '{}'".format(song_location))
-    print("Done with the zip")
+                _log("Could not find file '{}'".format(song_location), s='e')
+    _log("Done with the zip", s='d')
     return location_zip_file
 
 
@@ -159,7 +172,7 @@ def create_m3u8_file(songs_absolute_location):
     playlist_directory, __ = os.path.split(songs_absolute_location[0])
     # 00 as prefix => will be shown as first in dir listing
     m3u8_filename = "00 {}.m3u8".format(os.path.basename(playlist_directory))
-    print("Creating m3u8 file: '{}'".format(m3u8_filename))
+    _log("Creating m3u8 file: '{}'".format(m3u8_filename), s='n')
     m3u8_file_abs = os.path.join(playlist_directory, m3u8_filename)
     with open(m3u8_file_abs, "w", encoding="utf-8") as f:
         for song in songs_absolute_location:
@@ -194,7 +207,7 @@ def download_deezer_album_and_queue_and_zip(album_id, add_to_playlist, create_zi
             songs_absolute_location.append(absolute_filename)
         except Exception as e:
             growl.publish("warning", "DeezDown - WARNING", f"Failer to download: '{i}': {e}. Continuing with album...", icon="deezer-downloader.png")
-            print(f"Warning: {e}. Continuing with album...")
+            _log(f"Warning: {e}. Continuing with album...", s='e')
     update_mpd_db(songs_absolute_location, add_to_playlist)
     if create_zip:
         return [create_zip_file(songs_absolute_location)]
@@ -211,7 +224,7 @@ def download_deezer_playlist_and_queue_and_zip(playlist_id, add_to_playlist, cre
             absolute_filename = download_song_and_get_absolute_filename(TYPE_PLAYLIST, song, playlist_name)
             songs_absolute_location.append(absolute_filename)
         except Exception as e:
-            print(f"Warning: {e}. Continuing with playlist...")
+            _log(f"Warning: {e}. Continuing with playlist...", s='e')
     update_mpd_db(songs_absolute_location, add_to_playlist)
     songs_with_m3u8_file = create_m3u8_file(songs_absolute_location)
     if create_zip:
@@ -224,7 +237,7 @@ def download_spotify_playlist_and_queue_and_zip(playlist_name, playlist_id, add_
     songs = get_songs_from_spotify_website(playlist_id,
                                            config["proxy"]["server"])
     songs_absolute_location = []
-    print(f"We got {len(songs)} songs from the Spotify playlist")
+    _log(f"We got {len(songs)} songs from the Spotify playlist", s='n')
     for i, song_of_playlist in enumerate(songs):
         report_progress(i, len(songs))
         # song_of_playlist: string (artist - song)
@@ -234,7 +247,7 @@ def download_spotify_playlist_and_queue_and_zip(playlist_name, playlist_id, add_
             absolute_filename = download_song_and_get_absolute_filename(TYPE_PLAYLIST, song, playlist_name)
             songs_absolute_location.append(absolute_filename)
         except Exception as e:
-            print(f"Warning: Could not download Spotify song ({song_of_playlist}) on Deezer: {e}")
+            _log(f"Warning: Could not download Spotify song ({song_of_playlist}) on Deezer: {e}", s='e')
     update_mpd_db(songs_absolute_location, add_to_playlist)
     songs_with_m3u8_file = create_m3u8_file(songs_absolute_location)
     if create_zip:
@@ -264,10 +277,10 @@ def download_deezer_favorites(user_id: str, add_to_playlist: bool, create_zip: b
                 absolute_filename = download_song_and_get_absolute_filename(TYPE_PLAYLIST, song, output_directory)
                 songs_absolute_location.append(absolute_filename)
             except Exception as e:
-                print(f"Warning: {e}. Continuing with favorties...")
+                _log(f"Warning: {e}. Continuing with favorties...", s='e')
         except (IndexError, Deezer403Exception, Deezer404Exception) as msg:
             print(msg)
-            print(f"Could not find song ({fav_song}) on Deezer?")
+            _log(f"Could not find song ({fav_song}) on Deezer?", s='e')
     update_mpd_db(songs_absolute_location, add_to_playlist)
     songs_with_m3u8_file = create_m3u8_file(songs_absolute_location)
     if create_zip:

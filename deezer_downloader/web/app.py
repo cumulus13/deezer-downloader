@@ -32,6 +32,14 @@ except Exception as e:
     print(f"[GNTPLIB:ERROR] {e}")
     HAS_GNTPLIB = False
 
+try:
+    from .. printer import _print, _log  # type: ignore
+except:
+    try:
+        from . printer import _print, _log  # type: ignore
+    except:
+        from printer import _print, _log
+
 app = Flask(__name__)
 auto_index = AutoIndex(app, config["download_dirs"]["base"], add_url_rules=False)
 auto_index.add_icon_rule('music.png', ext='m3u8')
@@ -59,7 +67,7 @@ def validate_schema(*parameters_to_check):
         @wraps(f)
         def wrapper(*args, **kw):
             j = request.get_json(force=True)
-            print("User request: {} with {}".format(request.path, j))
+            _log("User request: {} with {}".format(request.path, j), s='i')
             # check if all parameters are supplied by the user
             if set(j.keys()) != set(parameters_to_check):
                 return jsonify({"error": 'parameters missing, required fields: {}'.format(parameters_to_check)}), 400
