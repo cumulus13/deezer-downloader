@@ -147,7 +147,7 @@ def download_song_and_get_absolute_filename(search_type, song, playlist_name=Non
         _log("Skipping song '{}'. Already exists.".format(absolute_filename), s='a')
     else:
         growl.publish("info", "DeezDown - INFO", "Downloading '{}'".format(song_filename), icon="deezer-downloader.png")
-        _log("Downloading '{}'".format(song_filename), s='i')
+        _log("Downloading '{}'".format(song_filename), s='w')
         download_song(song, absolute_filename)
     return absolute_filename
 

@@ -281,7 +281,7 @@ def download_song(song: dict, output_file: str) -> None:
         _log(f"{e}", s='e')
         raise DeezerApiException(f"Could not write song to disk: {e}") from e
     if HAS_GNTPLIB: growl.publish("finish", "DeezDown", "Download finished: {}".format(output_file), icon="deezer-downloader.png")
-    _log("Download finished: {}".format(output_file), s='i')
+    _log("Download finished: {}".format(output_file), s='n')
 
 
 def write_song_metadata(output_file: str, song: dict, is_flac: bool) -> None:
