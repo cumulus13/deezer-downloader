@@ -71,7 +71,7 @@ def update_mpd_db(songs, add_to_playlist):
     if not config["mpd"].getboolean("use_mpd"):
         return
     growl.publish("mpd_update", "DeezDown", "Updating mpd database", icon="deezer-downloader.png")
-    _log("Updating mpd database", s='i')
+    _log("Updating mpd database", s='a')
     timeout_counter = 0
     mpd_client = mpd.MPDClient(use_unicode=True)
     try:
