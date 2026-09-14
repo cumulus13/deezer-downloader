@@ -23,6 +23,7 @@ from deezer_downloader.deezer import get_file_extension
 from deezer_downloader.threadpool_queue import ThreadpoolScheduler, report_progress
 sched = ThreadpoolScheduler()
 from deezer_downloader.notifier import growl
+from deezer_downloader.disk_organizer import AlbumDiskOrganizer
 
 # try:
 #     from gntplib import Publisher  # type: ignore
@@ -110,7 +111,22 @@ def clean_filename(path):
     return ''.join([c for c in path if c not in array_of_special_characters])
 
 
-def download_song_and_get_absolute_filename(search_type, song, playlist_name=None):
+def get_album_dir(song):
+    # root album directory (NOT the per-disk CDxx subfolder). Shared
+    # helper so the disk organizer and the path builder below always
+    # agree on where an album lives.
+    album_name = "{} - {}".format(song.get('ALB_ART_NAME', song.get('ART_NAME', None)), song['ALB_TITLE'])
+    album_name = clean_filename(album_name)
+    album_dir = os.path.join(config["download_dirs"]["albums"], album_name)
+    os.makedirs(album_dir, exist_ok=True)
+    return album_dir
+
+
+def download_song_and_get_absolute_filename(search_type, song, playlist_name=None, disk_organizer=None):
+    # disk_organizer: optional AlbumDiskOrganizer (TYPE_ALBUM only).
+    # Decides whether this song lands flat in the album dir or in a
+    # CDxx subfolder, and reorganizes already-downloaded songs in the
+    # background the moment a second disk number is detected.
 
     file_extension = get_file_extension()
     if search_type == TYPE_ALBUM:
@@ -124,15 +140,23 @@ def download_song_and_get_absolute_filename(search_type, song, playlist_name=Non
                                             file_extension)
     song_filename = clean_filename(song_filename)
 
+    landed_flat_in_album_dir = False
+
     if search_type == TYPE_TRACK:
         absolute_filename = os.path.join(config["download_dirs"]["songs"], song_filename)
     elif search_type == TYPE_ALBUM:
-        album_name = "{} - {}".format(song.get('ALB_ART_NAME', song.get('ART_NAME', None)), song['ALB_TITLE'])
-        album_name = clean_filename(album_name)
-        album_dir = os.path.join(config["download_dirs"]["albums"], album_name)
-        if not os.path.exists(album_dir):
-            os.mkdir(album_dir)
-        absolute_filename = os.path.join(album_dir, song_filename)
+        album_dir = get_album_dir(song)
+        if disk_organizer is not None:
+            target_dir = disk_organizer.get_destination_dir(song.get("DISK_NUMBER"))
+            landed_flat_in_album_dir = (target_dir == album_dir)
+            # covers both "already in target_dir from an earlier run"
+            # and "still flat from an earlier run that got interrupted
+            # mid reorganization" -- either way, don't re-download it.
+            absolute_filename = disk_organizer.locate_existing_file(song_filename, target_dir) \
+                or os.path.join(target_dir, song_filename)
+        else:
+            target_dir = album_dir
+            absolute_filename = os.path.join(target_dir, song_filename)
     elif search_type == TYPE_PLAYLIST:
         assert type(playlist_name) is str
         playlist_name = clean_filename(playlist_name)
@@ -149,19 +173,38 @@ def download_song_and_get_absolute_filename(search_type, song, playlist_name=Non
         growl.publish("info", "DeezDown - INFO", "Downloading '{}'".format(song_filename), icon="deezer-downloader.png")
         _log("Downloading '{}'".format(song_filename), s='w')
         download_song(song, absolute_filename)
+
+    # register this song as "flat, for now" whether it was just
+    # downloaded or already existed from a previous run -- either way
+    # it needs to be swept up if a later disk triggers a reorganization
+    if search_type == TYPE_ALBUM and disk_organizer is not None and landed_flat_in_album_dir:
+        disk_organizer.record_flat_file(absolute_filename, song.get("DISK_NUMBER"))
+
     return absolute_filename
 
 
 def create_zip_file(songs_absolute_location):
-    # take first song in list and take the parent dir (name of album/playlist")
-    parent_dir = basename(os.path.dirname(songs_absolute_location[0]))
+    # Use the common parent of every song as the album/playlist root.
+    # For a single-disk album/playlist this is just that one folder
+    # (same as before). For a multi-disk album, songs are split across
+    # AlbumDir/CD01/, AlbumDir/CD02/, ... so the common parent is
+    # AlbumDir itself, which keeps the CDxx subfolders intact inside
+    # the zip instead of flattening every disk into one folder (which
+    # would silently overwrite same-numbered tracks from different CDs).
+    dirs = [os.path.dirname(p) for p in songs_absolute_location]
+    common_dir = os.path.commonpath(dirs) if dirs else ""
+    parent_dir = basename(common_dir) if common_dir else basename(os.path.dirname(songs_absolute_location[0]))
     location_zip_file = os.path.join(config["download_dirs"]["zips"], "{}.zip".format(parent_dir))
     _log("Creating zip file '{}'".format(location_zip_file), s='n')
     with ZipFile(location_zip_file, 'w', compression=ZIP_DEFLATED) as zip:
         for song_location in songs_absolute_location:
             try:
                 _log("Adding song {}".format(song_location), s='d')
-                zip.write(song_location, arcname=os.path.join(parent_dir, basename(song_location)))
+                if common_dir:
+                    arcname = os.path.join(parent_dir, os.path.relpath(song_location, common_dir))
+                else:
+                    arcname = os.path.join(parent_dir, basename(song_location))
+                zip.write(song_location, arcname=arcname)
             except FileNotFoundError:
                 _log("Could not find file '{}'".format(song_location), s='e')
     _log("Done with the zip", s='d')
@@ -199,15 +242,26 @@ def download_deezer_song_and_queue(track_id, add_to_playlist):
 def download_deezer_album_and_queue_and_zip(album_id, add_to_playlist, create_zip):
     songs = get_song_infos_from_deezer_website(TYPE_ALBUM, album_id)
     songs_absolute_location = []
+    # One organizer per album job: detects DISK_NUMBER changes across
+    # the songs of THIS album and, if it turns out to be multi-disk,
+    # reorganizes already-downloaded songs into CD01/CD02/... in the
+    # background (see disk_organizer.py) so downloading the next song
+    # is never blocked on the move.
+    disk_organizer = AlbumDiskOrganizer(get_album_dir(songs[0])) if songs else None
     for i, song in enumerate(songs):
         report_progress(i, len(songs))
         assert type(song) is dict
         try:
-            absolute_filename = download_song_and_get_absolute_filename(TYPE_ALBUM, song)
+            absolute_filename = download_song_and_get_absolute_filename(TYPE_ALBUM, song, disk_organizer=disk_organizer)
             songs_absolute_location.append(absolute_filename)
         except Exception as e:
             growl.publish("warning", "DeezDown - WARNING", f"Failer to download: '{i}': {e}. Continuing with album...", icon="deezer-downloader.png")
             _log(f"Warning: {e}. Continuing with album...", s='e')
+    if disk_organizer is not None:
+        # Wait for any background CDxx move(s) to finish and translate
+        # the paths collected above to their final location before they
+        # get used for mpd/zip/return.
+        songs_absolute_location = disk_organizer.resolve_final_paths(songs_absolute_location)
     update_mpd_db(songs_absolute_location, add_to_playlist)
     if create_zip:
         return [create_zip_file(songs_absolute_location)]
