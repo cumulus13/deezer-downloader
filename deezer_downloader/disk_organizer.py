@@ -165,10 +165,12 @@ class AlbumDiskOrganizer:
         os.makedirs(cd_dir, exist_ok=True)
         return cd_dir
 
-    def locate_existing_file(self, song_filename: str, target_dir: str):
+    def locate_existing_file(self, song_filename: str, target_dir: str,
+                              track_number=None, extension=None):
         """Check whether this song was already downloaded in an earlier
         run, so the caller can skip re-downloading it. Looks in two
-        places:
+        places, each checked exact-name-first then fuzzy (see
+        `_find_in_dir`):
         1. `target_dir` (its current, correct home).
         2. The legacy flat `album_dir` location -- covers a run that
            was interrupted mid-reorganization, leaving some disk-1
@@ -180,18 +182,26 @@ class AlbumDiskOrganizer:
         background move used for a live reorg) so it stops being an
         orphan outside its CD folder. Returns the file's path, or None
         if it hasn't been downloaded before.
+
+        `track_number`/`extension`: pass the song's own track number
+        and the download's file extension to also catch a file that
+        was manually renamed -- e.g. "01 - Artist Title.mp3" renamed by
+        hand to "01. Artist Title.mp3" -- as long as the track-number
+        prefix and extension are unchanged. Omit either to only match
+        the exact expected filename (old behavior).
         """
-        candidate = os.path.join(target_dir, song_filename)
-        if os.path.exists(candidate):
-            return candidate
+        found = self._find_in_dir(target_dir, song_filename, track_number, extension)
+        if found:
+            return found
 
         if target_dir == self.album_dir:
             return None
 
-        legacy = os.path.join(self.album_dir, song_filename)
-        if not os.path.exists(legacy):
+        legacy = self._find_in_dir(self.album_dir, song_filename, track_number, extension)
+        if not legacy:
             return None
 
+        candidate = os.path.join(target_dir, os.path.basename(legacy))
         try:
             shutil.move(legacy, candidate)
             with self._lock:
@@ -201,6 +211,50 @@ class AlbumDiskOrganizer:
         except OSError as e:
             _log("Could not move leftover file '{}' into '{}': {}".format(legacy, candidate, e), s='e')
             return legacy  # it still exists there, just not moved yet
+
+    def _find_in_dir(self, directory: str, exact_filename: str, track_number, extension):
+        """Exact match first. If that misses and a track_number/
+        extension were given, fall back to a fuzzy match: any file in
+        `directory` starting with that track number (allowing a
+        different amount of zero-padding) followed by one of the
+        separators people actually use when renaming by hand ( space,
+        '.', '_', '-', ')', ':' ), ending in the right extension.
+        Matches only if exactly one such file exists -- an ambiguous
+        match (more than one candidate) is logged and skipped rather
+        than guessed, so the caller falls back to downloading fresh."""
+        exact = os.path.join(directory, exact_filename)
+        if os.path.exists(exact):
+            return exact
+
+        if track_number is None or extension is None:
+            return None
+        try:
+            track_number = int(track_number)
+        except (TypeError, ValueError):
+            return None
+
+        try:
+            entries = os.listdir(directory)
+        except OSError:
+            return None
+
+        pattern = re.compile(
+            r"^0*{}[\s._\-):]+.*\.{}$".format(track_number, re.escape(extension)),
+            re.IGNORECASE,
+        )
+        matches = [
+            e for e in entries
+            if pattern.match(e) and os.path.isfile(os.path.join(directory, e))
+        ]
+        if len(matches) == 1:
+            return os.path.join(directory, matches[0])
+        if len(matches) > 1:
+            _log(
+                "Ambiguous rename match for track {} in '{}': {} -- not guessing which one, will download fresh".format(
+                    track_number, directory, matches),
+                s='w',
+            )
+        return None
 
     def record_flat_file(self, path: str, raw_disk_number) -> None:
         """Call once a song has actually been written to `album_dir`

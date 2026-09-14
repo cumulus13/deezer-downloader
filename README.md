@@ -17,6 +17,7 @@
 - proxy support (https/socks5)
 - [NEW] add support growl (gntplib) notification for warning, info, error
 - [NEW] add interactive cli tool
+- [NEW] auto-organize multi-disk albums into `CD01`, `CD02`, ... subfolders (see [Multi-disk album organization](#multi-disk-album-organization))
 
 **[NEW]** means add by my self, since on streaming repo not accepted.
 
@@ -29,6 +30,7 @@
   - [Run deezer-downloader](#5-run-deezer-downloader)
   - [Access the frontend](#6-access-the-frontend)
 - [Settings](#settings)
+- [Multi-disk album organization](#multi-disk-album-organization)
 - [Specific use cases](#specific-use-cases)
   - [Run with Docker](#run-with-docker)
   - [Run with Vagrant](#run-with-vagrant)
@@ -118,6 +120,30 @@ Dowload finished: /tmp/deezer-downloader/songs/Adele - Set Fire to the Rain.mp3
 Setting state to mission accomplished to worker 0
 worker 0 is done with task: {'track_id': 8086130, 'add_to_playlist': False} (state=mission accomplished)
 ```
+
+### Growl (gntplib) notifications
+
+**[NEW]** Besides the multi-disk album organization below, I also added Growl notifications via [gntplib](https://pypi.org/project/gntplib/). If `gntplib` is installed, deezer-downloader publishes `info`, `warning`, `error`, `debug`, `finish` and `mpd_update` events (song started/skipped/finished, album reorganized into CD folders, mpd db updates, errors, ...) to any Growl-compatible notification receiver (Growl for Windows/macOS, or a GNTP-compatible receiver on Linux) on your network. It's entirely optional: without `gntplib` installed, deezer-downloader falls back to a no-op publisher and just logs as usual, no crash, no extra config needed.
+
+```bash
+pip install gntplib
+```
+
+Then just run deezer-downloader as usual -- notifications are sent automatically once `gntplib` is importable.
+
+## Multi-disk album organization
+
+**[NEW]** When downloading an album, deezer-downloader now looks at each song's `DISK_NUMBER` tag and automatically splits multi-disk albums into `CD01`, `CD02`, ... subfolders under the album directory -- without making single-disk albums any different than before.
+
+How it behaves:
+- **Single-disk albums are untouched.** As long as every song reports the same disk number, files stay flat in the album folder, exactly like before this feature existed. No `CD01` folder is created just because an album *could* theoretically have more than one disk.
+- **Multi-disk detection is lazy.** The moment a song with a *different* disk number is downloaded, the album is recognized as multi-disk. Everything already downloaded for the first disk is then moved into its own `CD01` folder **in a background thread**, so downloading the next song is never blocked waiting on file moves. From that point on, every disk gets (or reuses) its own `CD0<n>` folder.
+- **Re-downloading / resuming is safe.** If you run the download again later:
+  - Songs already sitting in the right `CD0<n>` folder are recognized and skipped, not re-downloaded.
+  - Songs still sitting flat from an interrupted previous run (crashed mid-reorganization) are found and moved into their `CD0<n>` folder instead of being re-downloaded.
+  - If the whole album was already fully downloaded flat (from before this feature existed), the first re-detected disk change still triggers the same background reorg, and every later disk's already-existing songs are picked up individually as the download reaches them -- nothing gets re-downloaded, nothing gets duplicated.
+- **Manually organized/renamed collections are respected.** If you'd already organized an album into per-disk folders by hand -- `CD1`, `CD01`, `Disc 2`, `DISK-03`, any common `cd`/`disc`/`disk` + number naming, with or without zero-padding -- deezer-downloader detects and **reuses those exact folders** instead of creating a duplicate `CD01` next to them. A newly-appearing disk that doesn't have a folder yet gets one created in the same naming style as the rest of the album. It also tolerates songs that were manually renamed (e.g. `01 - Artist Title.mp3` renamed to `01. Artist Title.mp3`): as long as the track-number prefix and file extension are unchanged, it's recognized and not re-downloaded. If more than one file could match a track number ambiguously, deezer-downloader does not guess -- it logs a warning and downloads fresh rather than risk overwriting or skipping the wrong file.
+- Zip export (`create_zip=True`) keeps the `CD01`/`CD02` folder structure inside the archive instead of flattening every disk's tracks into one folder (which could otherwise silently overwrite same-numbered tracks from different discs).
 
 ## Specific use cases
 
@@ -243,7 +269,13 @@ Feel free to contribute. But please create an issue before and let's have a shor
 
 ## Changelog
 
-... this is not updated anymore. But the project is maintained and works!
+... this is not updated anymore (upstream). But the project is maintained and works!
+
+### cumulus13 fork additions
+
+- growl (gntplib) notifications for info/warning/error/debug/finish/mpd_update events
+- interactive cli tool
+- multi-disk album auto-organization into `CD01`/`CD02`/... subfolders, background-reorganized on detection, resume-safe, and aware of manually-created folders (`CD1`, `Disc 2`, ...) and manually-renamed filenames -- see [Multi-disk album organization](#multi-disk-album-organization)
 
 ### Version 2.0.0 (27.03.2023)
 

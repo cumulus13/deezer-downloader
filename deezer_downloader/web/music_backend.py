@@ -149,11 +149,17 @@ def download_song_and_get_absolute_filename(search_type, song, playlist_name=Non
         if disk_organizer is not None:
             target_dir = disk_organizer.get_destination_dir(song.get("DISK_NUMBER"))
             landed_flat_in_album_dir = (target_dir == album_dir)
-            # covers both "already in target_dir from an earlier run"
-            # and "still flat from an earlier run that got interrupted
-            # mid reorganization" -- either way, don't re-download it.
-            absolute_filename = disk_organizer.locate_existing_file(song_filename, target_dir) \
-                or os.path.join(target_dir, song_filename)
+            # covers "already in target_dir from an earlier run", "still
+            # flat from an earlier run that got interrupted mid
+            # reorganization", and a file that was manually renamed
+            # (e.g. "01 - Title.mp3" -> "01. Title.mp3") as long as its
+            # track-number prefix and extension are unchanged -- none
+            # of those should trigger a re-download.
+            absolute_filename = disk_organizer.locate_existing_file(
+                song_filename, target_dir,
+                track_number=song.get("TRACK_NUMBER"),
+                extension=file_extension,
+            ) or os.path.join(target_dir, song_filename)
         else:
             target_dir = album_dir
             absolute_filename = os.path.join(target_dir, song_filename)
