@@ -8,11 +8,15 @@
 
 import re
 import sys
+import os
+import logging
 from typing import Any, Dict, Set
 
 import time
 import threading
 import traceback
+from envdot import load_env
+load_env(watch_system_env=True)
 
 # Save Python's real built-in print
 __builtin_print__ = print
@@ -128,6 +132,25 @@ VALID_CUSTOM_KEYS: Set[str] = set(THEME_DICT.keys())
 if HAS_RICH:
     _console = Console(theme=Theme(THEME_DICT))
 
+def get_seq_host():
+    seq_host = os.getenv("SEQ_HOST", "")
+    seq_port = os.getenv("SEQ_PORT", 5341)
+    seq_url = ""
+    if seq_host:
+        if not seq_host.startswith(('http://', 'https://')): seq_host = f"http://{seq_host}"
+        seq_host_splitted = seq_host.split(":")
+        if len(seq_host_splitted) == 3:
+            seq_port = seq_host_splitted[-1]
+            seq_host = seq_host_splitted[:-1]
+        
+        seq_url = f"{seq_host}:{seq_port}"
+    return seq_url
+
+def get_seq_override_root_logger():
+    data = os.getenv("SEQ_OVERRIDE_ROOT_LOGGER", False)
+    if str(data).lower() in ("1", 'true'):
+        return True
+    return False
 
 def _core_output(is_log: bool, *args: Any, **kwargs: Any) -> None:
     """
@@ -135,7 +158,32 @@ def _core_output(is_log: bool, *args: Any, **kwargs: Any) -> None:
     Used by both _print and _log.
     """
     severity = kwargs.pop('s', None)
+    SEQ_ENABLE = kwargs.pop('seq', str(os.getenv("SEQ_ENABLE", False)).lower() in ("1", 'true', 'ok', 'yes', 'on'))
     style = None
+    richcleaner = None
+    HAS_RICH_CLEANER = False
+
+    if SEQ_ENABLE and os.getenv("SEQ_API", ""):
+        try:
+            from rich_cleaner import RichCleaner
+            richcleaner = RichCleaner()
+            HAS_RICH_CLEANER = True
+        except:
+            HAS_RICH_CLEANER = False
+        try:
+            import seqlog
+
+            # Configure seqlog
+            seqlog.log_to_seq(
+                server_url=os.getenv("SEQ_URL", get_seq_host() or "http://localhost:5341"), 
+                api_key=os.getenv("SEQ_API", ""),             
+                level=getattr(logging, os.getenv('SEQ_LEVEL', 'INFO')),
+                batch_size=os.getenv('SEQ_BATCH_SIZE', 10),                      
+                auto_flush_timeout=os.getenv('SEQ_AUTO_FLUSH_TIMEOUT', 1),               
+                override_root_logger=get_seq_override_root_logger()
+            )
+        except:
+            SEQ_ENABLE=False
 
     if isinstance(severity, str):
         severity_clean = severity.lower().strip()
@@ -165,11 +213,46 @@ def _core_output(is_log: bool, *args: Any, **kwargs: Any) -> None:
                         except Exception:
                             pass
             
+            # Map valid custom severity keys to python standard logging levels
+            seq_level = getattr(logging, os.getenv('SEQ_LEVEL', 'INFO'))
+            if style:
+                primary_sev = SEVERITY_ALIASES.get(style, style)
+                level_map = {
+                    'emergency': logging.FATAL,
+                    'critical': logging.CRITICAL,
+                    'alert': logging.CRITICAL,
+                    'error': logging.ERROR,
+                    'warning': logging.WARNING,
+                    'notice': logging.INFO,
+                    'info': logging.INFO,
+                    'debug': logging.DEBUG,
+                }
+                seq_level = level_map.get(primary_sev, logging.INFO)
+
+            # Convert arguments to a single text line and strip rich brackets for seqlog
+            plain_message = " ".join(str(a) for a in args)
+            if HAS_RICH_CLEANER and richcleaner
+                clean_message = richcleaner.clean_text(plain_message)
+            else:
+                clean_message = re.sub(r'\[.*?\]', '', plain_message)
+
             # Route to the appropriate rich method
             if is_log:
                 _console.log(*rich_args, **rich_kwargs)
+                # if SEQ_ENABLE:
+                #     try:
+                #         logging.log(seq_level, clean_message)
+                #     except Exception:
+                #         pass
             else:
                 _console.print(*rich_args, **rich_kwargs)
+
+            if SEQ_ENABLE:
+                try:
+                    logging.log(seq_level, clean_message)
+                except Exception:
+                    pass
+
             return
             
         except Exception:

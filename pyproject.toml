@@ -1,16 +1,19 @@
 [tool.poetry]
 name = "deezer-downloader"
-version = "1.0.13"
+version = "1.0.14"
 description = "download music from Deezer with a nice front end"
 authors = [
     "kmille <github@androidloves.me>",
+]
+maintainers = [
+    "Hadi Cahyadi <cumulus13@gmail.com>",
 ]
 readme = "README.md"
 packages = [
     { include = "deezer_downloader" },
 ]
-repository = "https://github.com/kmille/deezer-downloader"
-homepage = "https://github.com/kmille/deezer-downloader"
+repository = "https://github.com/cumulus13/deezer-downloader"
+homepage = "https://github.com/cumulus13/deezer-downloader"
 
 [tool.poetry.dependencies]
 python = "^3.10.1"
@@ -24,6 +27,25 @@ giphypop = "^0.3"
 waitress = "^3.0.0"
 mutagen = "^1.47.0"
 pyotp = "^2.9.0"
+rich-cleaner = "*"
+envdot = "*"
+make_colors = "*"
+seqlog = "*"
+
+[tool.poetry.dependencies.pydebugger2]
+git = "https://github.com/cumulus13/pydebugger2"
+
+[tool.poetry.dependencies.richcolorlog]
+git = "https://github.com/cumulus13/richcolorlog"
+
+[tool.poetry.dependencies.textual]
+git = "https://github.com/cumulus13/textual"
+
+[tool.poetry.dependencies.rich]
+git = "https://github.com/cumulus13/rich"
+
+[tool.poetry.dependencies.gntplib]
+git = "https://github.com/cumulus13/gntplib"
 
 [tool.poetry.dependencies.requests]
 extras = [
