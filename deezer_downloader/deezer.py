@@ -1,3 +1,12 @@
+#!/usr/bin/env python3
+
+# File: deezer_downloader/deezer.py
+# Editor: Hadi Cahyadi <cumulus13@gmail.com>
+# Date: 2026-10-14
+# Description: 
+# License: MIT
+
+import time
 import sys
 import re
 import json
@@ -348,7 +357,12 @@ def get_song_infos_from_deezer_website(search_type, id):
     # Deezer403Exception if we are not logged in
     def get_and_parse_data_from_deezer_website(search_type, id):
         url = "https://www.deezer.com/us/{}/{}".format(search_type, id)
-        resp = session.get(url)
+        while 1:
+            try:
+                resp = session.get(url)
+                break
+            except:
+                time.sleep(1)
         if resp.status_code == 404:
             if HAS_GNTPLIB: growl.publish("error", "DeezDown - ERROR", "ERROR: Got a 404 for {} from Deezer".format(url), icon="deezer-downloader.png")
             raise Deezer404Exception("ERROR: Got a 404 for {} from Deezer".format(url))
