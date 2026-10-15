@@ -231,7 +231,7 @@ def _core_output(is_log: bool, *args: Any, **kwargs: Any) -> None:
 
             # Convert arguments to a single text line and strip rich brackets for seqlog
             plain_message = " ".join(str(a) for a in args)
-            if HAS_RICH_CLEANER and richcleaner
+            if HAS_RICH_CLEANER and richcleaner:
                 clean_message = richcleaner.clean_text(plain_message)
             else:
                 clean_message = re.sub(r'\[.*?\]', '', plain_message)
