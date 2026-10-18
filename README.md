@@ -19,7 +19,9 @@
 - [NEW] add interactive cli tool
 - [NEW] auto-organize multi-disk albums into `CD01`, `CD02`, ... subfolders (see [Multi-disk album organization](#multi-disk-album-organization))
 
-**[NEW]** means add by my self, since on streaming repo not accepted.
+**[NEW]** means add by my self [(cumulus13)](cumulus13), since on streaming repo not accepted.
+
+[![Screenshot](https://files.catbox.moe/xl4ze3.png)](https://files.catbox.moe/xl4ze3.png)
 
 ## Table of Contents:
 - [Get started](#get-started)
